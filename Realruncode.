@@ -1,0 +1,43 @@
+const runCode = async () => {
+  setIsRunning(true);
+  setShowOutput(true);
+  setOutput('');
+
+  if (language === 'javascript') {
+    setOutput('Running JS...\n');
+    webViewRef.current?.injectJavaScript(`
+      window.postMessage({code: ${JSON.stringify(code)}}, "*");
+      true;
+    `);
+    setTimeout(() => {
+      if (isRunning) {
+        setIsRunning(false);
+        setOutput(prev => prev + '\n\nTimeout—code took too long.');
+      }
+    }, 15000);
+  } else if (language === 'python') {
+    setOutput('Running Python...\n');
+    try {
+      const res = await fetch('https://emkc.org/api/v2/piston/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          language: 'python',
+          version: '3.10',
+          files: [{ name: 'main.py', content: code }]
+        })
+      });
+      const data = await res.json();
+      if (data.run?.code === 0) {
+        setOutput(data.run.output || data.run.stdout || '(empty output)');
+      } else {
+        setOutput(`Error:\n${data.run?.stderr || 'Unknown'}`);
+      }
+    } catch (err) {
+      setOutput(`Network fail: ${err.message}`);
+    }
+  } else {
+    setOutput('Only JS and Python for now.');
+  }
+  setIsRunning(false);
+};
