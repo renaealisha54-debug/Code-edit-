@@ -1,0 +1,89 @@
+import React, { useState, useRef } from 'react';
+import { View, TextInput, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { WebView } from 'react-native-webview';
+import OutputPanel from './OutputPanel';  // import above
+
+export default function CodeEditor() {
+  const = useState('// Type JS here\nconsole.log("Hello from real runner!");\nreturn 42;');
+  const = useState('');
+  const = useState(false);
+  const = useState<string | undefined>();
+  const webViewRef = useRef<WebView>(null);
+
+  const runCode = () => {
+    setIsRunning(true);
+    setOutput('Executing...\n');
+    setError(undefined);
+
+    // Inject code into hidden WebView
+    const jsToRun = `
+      try {
+        const result = eval(${JSON.stringify(code)});
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'result', value: result }));
+      } catch (e) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: e.message }));
+      }
+      true;
+    `;
+
+    webViewRef.current?.injectJavaScript(jsToRun);
+
+    // Timeout if hangs
+    const timeout = setTimeout(() => {
+      if (isRunning) {
+        setIsRunning(false);
+        setOutput(prev => prev + '\nTimeout – code hung.');
+      }
+    }, 10000);
+
+    return () => clearTimeout(timeout);
+  };
+
+  return (
+    <View style={styles.container}>
+      {/* Hidden WebView for safe eval */}
+      <WebView
+        ref={webViewRef}
+        source={{ html: '<html><body><script>window.ReactNativeWebView = window.ReactNativeWebView || {};</script></body></html>' }}
+        style={{ height: 0, width: 0 }}
+        onMessage={(event) => {
+          try {
+            const data = JSON.parse(event.nativeEvent.data);
+            if (data.type === 'result') {
+              setOutput(`→ ${data.value ?? 'undefined'}`);
+            } else if (data.type === 'error') {
+              setError(data.message);
+              setOutput(`Error: ${data.message}`);
+            }
+          } catch {}
+          setIsRunning(false);
+        }}
+      />
+
+      {/* Code Input */}
+      <TextInput
+        multiline
+        style={styles.editor}
+        value={code}
+        onChangeText={setCode}
+        placeholder="// Start coding..."
+        placeholderTextColor="#9CA3AF"
+      />
+
+      {/* Run Button */}
+      <TouchableOpacity style={styles.runButton} onPress={runCode} disabled={isRunning}>
+        <Text style={styles.runText}>{isRunning ? 'Running...' : 'Run JS'}</Text>
+      </TouchableOpacity>
+
+      {/* Output */}
+      <OutputPanel output={output} isRunning={isRunning} error={error} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  editor: { flex: 1, padding: 16, fontFamily: 'monospace', fontSize: 14, backgroundColor: '#FFFFFF', color: '#111827' },
+  runButton: { backgroundColor: '#10B981', padding: 16, alignItems: 'center', margin: 16, borderRadius: 12 },
+  runText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
+});
